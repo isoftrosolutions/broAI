@@ -1,13 +1,299 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Agent Workspace</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>broAI | AI Workspace</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        [x-cloak] { display: none !important; }
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #1f2937; }
+        .browser-shadow { box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+        .sidebar-shadow { box-shadow: -4px 0 20px rgba(0,0,0,0.03); }
+        .chat-input-shadow { box-shadow: 0 10px 40px rgba(0,0,0,0.08); }
+        .tab-active { background: #fff; color: #111; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .glass-btn { @apply hover:bg-black/5 p-1.5 rounded-lg transition-colors; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #d1d5db; }
+    </style>
+</head>
+<body x-data="agentWorkspace()" x-init="init()" class="h-screen flex flex-col antialiased">
+
+    <!-- Top Tabs Bar -->
+    <nav class="h-12 flex items-center px-4 gap-2 bg-[#f3f4f6] border-b border-gray-200/50">
+        <div class="flex items-center gap-1.5 p-1 bg-gray-200/40 rounded-xl">
+            <button class="px-3 py-1.5 text-xs font-semibold rounded-lg tab-active flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-orange-400"></span>
+                Claude
+            </button>
+            <button class="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 flex items-center gap-2">
+                <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-500"></i>
+                Clinic chatbot mark...
+            </button>
+        </div>
+        <button class="glass-btn ml-1">
+            <i data-lucide="layout-grid" class="w-4 h-4 text-gray-500"></i>
+        </button>
+    </nav>
+
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Main Browser Preview (Left) -->
+        <main class="flex-1 flex flex-col p-4">
+            <div class="flex-1 bg-white rounded-3xl browser-shadow border border-gray-200/60 overflow-hidden flex flex-col relative">
+                <!-- Browser Navbar -->
+                <div class="h-12 border-b border-gray-100 px-4 flex items-center justify-between">
+                    <div class="flex items-center gap-8">
+                        <div class="flex items-center gap-4 text-[13px] font-medium text-gray-500">
+                            <span class="text-gray-900 border-b-2 border-gray-900 h-12 flex items-center">Gmail</span>
+                            <span class="hover:text-gray-900 cursor-pointer">Images</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button class="glass-btn"><i data-lucide="grid-3x3" class="w-5 h-5 text-gray-600"></i></button>
+                        <div class="w-8 h-8 bg-gray-100 rounded-full"></div>
+                    </div>
+                </div>
+
+                <!-- Browser Viewport -->
+                <div class="flex-1 relative overflow-auto bg-white flex flex-col items-center justify-center">
+                    <template x-if="!screenshot">
+                        <div class="flex flex-col items-center gap-8 mb-12">
+                            <h1 class="text-7xl font-bold tracking-tighter text-[#34a853]">Google</h1>
+                            <div class="w-[500px] h-12 rounded-full border border-gray-200 shadow-sm flex items-center px-5 gap-4 hover:shadow-md transition-shadow">
+                                <i data-lucide="search" class="w-5 h-5 text-gray-400"></i>
+                                <input type="text" placeholder="Search..." class="flex-1 bg-transparent outline-none text-sm">
+                                <div class="flex items-center gap-3">
+                                    <i data-lucide="mic" class="w-4 h-4 text-gray-500"></i>
+                                    <i data-lucide="camera" class="w-4 h-4 text-gray-500"></i>
+                                    <button class="bg-gray-100 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> AI Mode
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-center gap-2">
+                                <div class="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 hover:bg-gray-200 transition-colors cursor-pointer">
+                                    <i data-lucide="plus" class="w-6 h-6"></i>
+                                </div>
+                                <span class="text-xs text-gray-500">Add shortcut</span>
+                            </div>
+                        </div>
+                    </template>
+                    
+                    <template x-if="screenshot">
+                        <img :src="'data:image/png;base64,' + screenshot" class="w-full h-full object-contain">
+                    </template>
+
+                    <!-- Edit Floating Action Button -->
+                    <button class="absolute bottom-6 right-6 w-12 h-12 bg-emerald-100 hover:bg-emerald-200 rounded-full flex items-center justify-center text-emerald-800 shadow-lg transition-all">
+                        <i data-lucide="pencil" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- AI Sidebar (Right) -->
+        <aside class="w-[480px] bg-[#f9fafb] sidebar-shadow flex flex-col border-l border-gray-200/50">
+            <!-- Sidebar Header -->
+            <div class="px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 flex items-center justify-center text-orange-600">
+                        <i data-lucide="sun" class="w-6 h-6"></i>
+                    </div>
+                    <h2 class="text-lg font-semibold tracking-tight text-gray-900">Claude</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button class="glass-btn"><i data-lucide="pin" class="w-4 h-4 text-gray-400"></i></button>
+                    <button class="glass-btn"><i data-lucide="x" class="w-4 h-4 text-gray-400"></i></button>
+                </div>
+            </div>
+
+            <!-- Model Selection & Toolbar -->
+            <div class="px-6 pb-4 flex items-center justify-between border-b border-gray-200/50">
+                <div class="relative" x-data="{ open: false }">
+                    <button @click="open = !open" class="flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-gray-900">
+                        Sonnet 4.6
+                        <i data-lucide="chevron-down" class="w-4 h-4 transition-transform" :class="open ? 'rotate-180' : ''"></i>
+                    </button>
+                </div>
+                <div class="flex items-center gap-1 text-gray-400">
+                    <button class="glass-btn"><i data-lucide="zap" class="w-4 h-4"></i></button>
+                    <button class="glass-btn"><i data-lucide="message-square" class="w-4 h-4"></i></button>
+                    <button class="glass-btn"><i data-lucide="more-vertical" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+
+            <!-- Chat / Reasoning Area -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6" id="log-container">
+                <template x-for="(log, index) in logs" :key="index">
+                    <div class="flex flex-col gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-gray-100" :class="getLogColor(log.type)" x-text="log.type"></span>
+                        </div>
+                        <p class="text-sm text-gray-700 leading-relaxed" x-text="log.content"></p>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Chat Input Section -->
+            <div class="p-6 pt-0">
+                <div class="bg-white rounded-2xl p-4 chat-input-shadow border border-gray-200/60">
+                    <textarea 
+                        x-model="task" 
+                        @keydown.enter.prevent="!isRunning && startTask()"
+                        placeholder="Type / for commands" 
+                        class="w-full h-24 bg-transparent outline-none text-[15px] text-gray-800 placeholder:text-gray-400 resize-none"
+                        :disabled="isRunning"
+                    ></textarea>
+                    
+                    <div class="mt-4 flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <button 
+                                @click="askBeforeActing = !askBeforeActing"
+                                class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors"
+                                :class="askBeforeActing ? 'bg-orange-50 border-orange-200 text-orange-700' : 'bg-gray-50 border-gray-200 text-gray-600'"
+                            >
+                                <i data-lucide="hand" class="w-3.5 h-3.5"></i>
+                                Ask before acting
+                            </button>
+                        </div>
+                        
+                        <div class="flex items-center gap-2">
+                            <button class="glass-btn"><i data-lucide="mouse-pointer-2" class="w-4 h-4 text-gray-400"></i></button>
+                            <button class="glass-btn"><i data-lucide="plus" class="w-4 h-4 text-gray-400"></i></button>
+                            <button 
+                                @click="startTask()" 
+                                :disabled="isRunning || !task.trim()"
+                                class="w-8 h-8 rounded-lg bg-orange-200 disabled:opacity-40 flex items-center justify-center text-orange-800 transition-all hover:bg-orange-300"
+                            >
+                                <i x-show="!isRunning" data-lucide="arrow-up" class="w-5 h-5"></i>
+                                <div x-show="isRunning" class="w-4 h-4 border-2 border-orange-800/30 border-t-orange-800 rounded-full animate-spin"></div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-[11px] text-center text-gray-400 mt-4 px-8">
+                    Claude is AI and can make mistakes. Please double-check responses.
+                </p>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        function agentWorkspace() {
+            return {
+                task: '',
+                isRunning: false,
+                logs: [],
+                screenshot: null,
+                askBeforeActing: true,
+                apiBase: 'http://localhost:8000',
+
+                init() {
+                    lucide.createIcons();
+                    this.updateSnapshot();
+                },
+
+                async startTask() {
+                    if (!this.task.trim()) return;
+                    
+                    this.isRunning = true;
+                    this.addLog('user', this.task);
+                    const currentTask = this.task;
+                    this.task = '';
+
+                    try {
+                        const response = await fetch(`${this.apiBase}/task`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                task: currentTask,
+                                ask_before_acting: this.askBeforeActing 
+                            })
+                        });
+
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder();
+
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+                            
+                            const chunk = decoder.decode(value);
+                            const lines = chunk.split('\n');
+                            
+                            for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                    const event = JSON.parse(line.slice(6));
+                                    this.handleEvent(event);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        this.addLog('error', `Connection error: ${e.message}`);
+                    } finally {
+                        this.isRunning = false;
+                        this.updateSnapshot();
+                    }
+                },
+
+                handleEvent(event) {
+                    switch (event.type) {
+                        case 'thought':
+                            this.addLog('thinking', event.content);
+                            break;
+                        case 'tool_call':
+                            this.addLog('action', event.content);
+                            break;
+                        case 'tool_result':
+                            this.updateSnapshot();
+                            break;
+                        case 'error':
+                            this.addLog('error', event.content);
+                            break;
+                        case 'done':
+                            this.addLog('assistant', event.content);
+                            break;
+                    }
+                },
+
+                async updateSnapshot() {
+                    try {
+                        const res = await fetch(`${this.apiBase}/snapshot`);
+                        const data = await res.json();
+                        if (data.ok) {
+                            this.screenshot = data.screenshot_base64;
+                            this.$nextTick(() => lucide.createIcons());
+                        }
+                    } catch (e) { console.error('Snapshot error:', e); }
+                },
+
+                addLog(type, content) {
+                    this.logs.push({ type, content });
+                    this.$nextTick(() => {
+                        const container = document.getElementById('log-container');
+                        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                        lucide.createIcons();
+                    });
+                },
+
+                getLogColor(type) {
+                    return {
+                        'user': 'text-gray-600',
+                        'thinking': 'text-indigo-600',
+                        'action': 'text-amber-600',
+                        'error': 'text-red-600',
+                        'assistant': 'text-orange-600'
+                    }[type] || 'text-gray-500';
+                }
+            }
+        }
+    </script>
+</body>
 </html>
