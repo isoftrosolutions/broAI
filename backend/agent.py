@@ -1,3 +1,5 @@
+import re
+import time
 import json
 import asyncio
 from functools import partial
@@ -24,15 +26,16 @@ class AgentLoop:
                 "content": f"""You are an autonomous Browser Automation Agent. You must execute tasks deterministically by calling tools.
 
 Hard requirements:
-- Use only available tools: get_page_state, open_url, click, type, scroll, extract, wait, back, forward.
+- Use ONLY the provided tool-calling interface.
+- 🚫 NEVER output text like '<function=...>' or 'Call tool...'. 
+- 🚫 NEVER use XML tags, brackets, or pseudo-code to call tools.
+- Output ONLY two things: 1. Your concise reasoning (thought), 2. The actual tool call via the API.
 - Always begin with get_page_state before action planning.
-- Keep each cycle minimal: observe -> act -> validate.
-- Include current_page_url and page_title in reasoning each cycle.
-- Never attempt CAPTCHA bypass, auth bypass, or hidden capabilities.
-- For risky actions (submit, purchase, delete, send), stop and ask for explicit user confirmation.
-- Retry limit per similar failed action: {self.max_retries_per_action}.
-- Stop if no meaningful progress.
-- Output concise assistant text and use tools for execution.
+- Never interact with the bridge_url directly ({self.bridge_url}).
+
+Example of CORRECT behavior:
+Thought: I need to see the current page content first.
+[The model then triggers a native tool call to get_page_state]
 
 Stop conditions:
 - Task complete -> provide final result.
@@ -55,14 +58,83 @@ Runtime:
             iteration += 1
 
             try:
-                # Get response from Groq
-                response = self.client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=messages,
-                    tools=TOOL_SCHEMAS,
-                    tool_choice="auto",
-                    max_tokens=1024
-                )
+                # Get response from Groq with retry logic
+                max_api_retries = 3
+                api_retry_count = 0
+                response = None
+                
+                while api_retry_count < max_api_retries:
+                    try:
+                        response = self.client.chat.completions.create(
+                            model="llama-3.3-70b-versatile",
+                            messages=messages,
+                            tools=TOOL_SCHEMAS,
+                            tool_choice="auto",
+                            max_tokens=1024
+                        )
+                        break # Success
+                    except Exception as e:
+                        # Safety Net: Catch 400 errors with failed_generation hallucinations
+                        error_str = str(e)
+                        if "400" in error_str and "failed_generation" in error_str:
+                            # Try to extract <function=tool_name|null> or <function=tool_name{...}>
+                            match = re.search(r"<function=(\w+)(?:\|null|\s*(\{.*?\}))?", error_str)
+                            if match:
+                                tool_name = match.group(1)
+                                try:
+                                    args_str = match.group(2)
+                                    tool_args = json.loads(args_str) if args_str else {}
+                                    # We found a hallucinated tool call, let's treat it as valid!
+                                    yield {
+                                        "type": "thought",
+                                        "content": f"🛠️ Rescued tool call from hallucinated format: {tool_name}"
+                                    }
+                                    # Create a cleaned tool call object for history
+                                    rescued_tool_call = {
+                                        'id': f'call_{int(time.time())}',
+                                        'type': 'function',
+                                        'function': {
+                                            'name': tool_name,
+                                            'arguments': json.dumps(tool_args)
+                                        }
+                                    }
+                                    
+                                    # Create a dummy message object to satisfy the execution loop
+                                    class DummyMessage:
+                                        def __init__(self, tc):
+                                            self.content = "I will proceed with the requested action."
+                                            # Create object-like access for the execution loop
+                                            self.tool_calls = [
+                                                type('obj', (object,), {
+                                                    'id': tc['id'],
+                                                    'function': type('obj', (object,), tc['function'])
+                                                })
+                                            ]
+                                    message = DummyMessage(rescued_tool_call)
+                                    break # Success via rescue
+                                except Exception:
+                                    pass
+
+                        if "rate_limit_reached" in error_str.lower() or "429" in error_str:
+                            api_retry_count += 1
+                            wait_time = api_retry_count * 5
+                            yield {
+                                "type": "thought",
+                                "content": f"⚠️ Rate limit reached. Waiting {wait_time}s before retrying (Attempt {api_retry_count}/{max_api_retries})..."
+                            }
+                            time.sleep(wait_time)
+                            continue
+                        
+                        # Log non-rate-limit errors to help debugging
+                        yield {
+                            "type": "thought",
+                            "content": f"❌ API Error: {error_str[:100]}..."
+                        }
+                        raise e 
+# Re-raise if not a rate limit error
+
+                if not response:
+                    raise Exception("Failed to get response from Groq after multiple retries.")
 
                 message = response.choices[0].message
 
@@ -92,7 +164,10 @@ Runtime:
                 # Execute tool calls
                 for tool_call in message.tool_calls:
                     tool_name = tool_call.function.name
-                    tool_args = json.loads(tool_call.function.arguments)
+                    try:
+                        tool_args = json.loads(tool_call.function.arguments) or {}
+                    except Exception:
+                        tool_args = {}
                     if self._is_high_risk_action(tool_name, tool_args):
                         reason = f"Confirmation required before risky action: {tool_name} {tool_args}"
                         yield {

@@ -19,20 +19,32 @@ class BrowserBridge:
             return
 
         self._playwright = await async_playwright().start()
-        chrome_path = os.environ.get("BROAI_CHROME_PATH") or r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-        launch_kwargs = {
-            "headless": True,
-            "args": ["--disable-dev-shm-usage", "--disable-gpu"],
-        }
-        if os.path.exists(chrome_path):
-            launch_kwargs["executable_path"] = chrome_path
-        self.browser = await self._playwright.chromium.launch(**launch_kwargs)
-        self.context = await self.browser.new_context(viewport={"width": 1440, "height": 1024})
-        self.page = await self.context.new_page()
-        start_url = os.environ.get("BROAI_START_URL", "https://www.google.com")
+        
+        # Try to connect to an existing Chrome instance first (Real Chrome mode)
         try:
-            await self.page.goto(start_url, wait_until="domcontentloaded")
-        except Exception:
+            self.browser = await self._playwright.chromium.connect_over_cdp("http://localhost:9222")
+            # If we connected, we use the existing context/page
+            contexts = self.browser.contexts
+            if contexts:
+                self.context = contexts[0]
+                pages = self.context.pages
+                self.page = pages[0] if pages else await self.context.new_page()
+            else:
+                self.context = await self.browser.new_context()
+                self.page = await self.context.new_page()
+            print("Successfully connected to Real Chrome on port 9222")
+        except Exception as e:
+            print(f"Could not connect to Real Chrome (port 9222). Launching fresh instance. Error: {e}")
+            chrome_path = os.environ.get("BROAI_CHROME_PATH") or r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+            launch_kwargs = {
+                "headless": False, # Switch to False so you can see it!
+                "args": ["--disable-dev-shm-usage", "--disable-gpu"],
+            }
+            if os.path.exists(chrome_path):
+                launch_kwargs["executable_path"] = chrome_path
+            self.browser = await self._playwright.chromium.launch(**launch_kwargs)
+            self.context = await self.browser.new_context(viewport={"width": 1440, "height": 1024})
+            self.page = await self.context.new_page()
             await self.page.goto("about:blank")
 
     async def shutdown(self) -> None:

@@ -7,7 +7,8 @@ if sys.platform == 'win32':
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import json
 import os
@@ -38,10 +39,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files
+# Make sure these folders exist in the current working directory
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
+app.mount("/ext-static", StaticFiles(directory="extension"), name="ext-static")
+
+@app.get("/")
+async def read_index():
+    return FileResponse("frontend/index.html")
+
+@app.get("/extension-ui")
+async def read_extension_ui():
+    return FileResponse("extension/index.html")
+
 class TaskRequest(BaseModel):
     task: str
     workspace_path: str | None = None
-    bridge_url: str = "http://localhost:8001"
+    bridge_url: str = "http://localhost:8000"
     max_steps: int = 20
 
 @app.on_event("startup")

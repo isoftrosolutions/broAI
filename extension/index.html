@@ -6,120 +6,9 @@
     <title>broAI | AI Workspace</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
-
-    <script>
-        function agentWorkspace() {
-            return {
-                task: '',
-                isRunning: false,
-                logs: [],
-                screenshot: null,
-                askBeforeActing: true,
-                apiBase: 'http://localhost:8000',
-
-                init() {
-                    lucide.createIcons();
-                    this.updateSnapshot();
-                },
-
-                async startTask() {
-                    if (!this.task.trim()) return;
-
-                    this.isRunning = true;
-                    this.addLog('user', this.task);
-                    const currentTask = this.task;
-                    this.task = '';
-
-                    try {
-                        const response = await fetch(`${this.apiBase}/task`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                task: currentTask,
-                                ask_before_acting: this.askBeforeActing
-                            })
-                        });
-
-                        const reader = response.body.getReader();
-                        const decoder = new TextDecoder();
-
-                        while (true) {
-                            const { value, done } = await reader.read();
-                            if (done) break;
-
-                            const chunk = decoder.decode(value);
-                            const lines = chunk.split('\n');
-
-                            for (const line of lines) {
-                                if (line.startsWith('data: ')) {
-                                    const event = JSON.parse(line.slice(6));
-                                    this.handleEvent(event);
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        this.addLog('error', `Connection error: ${e.message}`);
-                    } finally {
-                        this.isRunning = false;
-                        this.updateSnapshot();
-                    }
-                },
-
-                handleEvent(event) {
-                    switch (event.type) {
-                        case 'thought':
-                            this.addLog('thinking', event.content);
-                            break;
-                        case 'tool_call':
-                            this.addLog('action', event.content);
-                            break;
-                        case 'tool_result':
-                            this.updateSnapshot();
-                            break;
-                        case 'error':
-                            this.addLog('error', event.content);
-                            break;
-                        case 'done':
-                            this.addLog('assistant', event.content);
-                            break;
-                    }
-                },
-
-                async updateSnapshot() {
-                    try {
-                        const res = await fetch(`${this.apiBase}/snapshot`);
-                        const data = await res.json();
-                        if (data.ok) {
-                            this.screenshot = data.screenshot_base64;
-                            this.$nextTick(() => lucide.createIcons());
-                        }
-                    } catch (e) { console.error('Snapshot error:', e); }
-                },
-
-                addLog(type, content) {
-                    this.logs.push({ type, content });
-                    this.$nextTick(() => {
-                        const container = document.getElementById('log-container');
-                        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-                        lucide.createIcons();
-                    });
-                },
-
-                getLogColor(type) {
-                    return {
-                        'user': 'text-gray-600',
-                        'thinking': 'text-indigo-600',
-                        'action': 'text-amber-600',
-                        'error': 'text-red-600',
-                        'assistant': 'text-orange-600'
-                    }[type] || 'text-gray-500';
-                }
-            }
-        }
-    </script>
 
     <style>
         [x-cloak] { display: none !important; }
@@ -295,5 +184,116 @@
             </div>
         </aside>
     </div>
+
+    <script>
+        function agentWorkspace() {
+            return {
+                task: '',
+                isRunning: false,
+                logs: [],
+                screenshot: null,
+                askBeforeActing: true,
+                apiBase: 'http://localhost:8000',
+
+                init() {
+                    lucide.createIcons();
+                    this.updateSnapshot();
+                },
+
+                async startTask() {
+                    if (!this.task.trim()) return;
+                    
+                    this.isRunning = true;
+                    this.addLog('user', this.task);
+                    const currentTask = this.task;
+                    this.task = '';
+
+                    try {
+                        const response = await fetch(`${this.apiBase}/task`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                task: currentTask,
+                                ask_before_acting: this.askBeforeActing 
+                            })
+                        });
+
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder();
+
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+                            
+                            const chunk = decoder.decode(value);
+                            const lines = chunk.split('\n');
+                            
+                            for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                    const event = JSON.parse(line.slice(6));
+                                    this.handleEvent(event);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        this.addLog('error', `Connection error: ${e.message}`);
+                    } finally {
+                        this.isRunning = false;
+                        this.updateSnapshot();
+                    }
+                },
+
+                handleEvent(event) {
+                    switch (event.type) {
+                        case 'thought':
+                            this.addLog('thinking', event.content);
+                            break;
+                        case 'tool_call':
+                            this.addLog('action', event.content);
+                            break;
+                        case 'tool_result':
+                            this.updateSnapshot();
+                            break;
+                        case 'error':
+                            this.addLog('error', event.content);
+                            break;
+                        case 'done':
+                            this.addLog('assistant', event.content);
+                            break;
+                    }
+                },
+
+                async updateSnapshot() {
+                    try {
+                        const res = await fetch(`${this.apiBase}/snapshot`);
+                        const data = await res.json();
+                        if (data.ok) {
+                            this.screenshot = data.screenshot_base64;
+                            this.$nextTick(() => lucide.createIcons());
+                        }
+                    } catch (e) { console.error('Snapshot error:', e); }
+                },
+
+                addLog(type, content) {
+                    this.logs.push({ type, content });
+                    this.$nextTick(() => {
+                        const container = document.getElementById('log-container');
+                        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                        lucide.createIcons();
+                    });
+                },
+
+                getLogColor(type) {
+                    return {
+                        'user': 'text-gray-600',
+                        'thinking': 'text-indigo-600',
+                        'action': 'text-amber-600',
+                        'error': 'text-red-600',
+                        'assistant': 'text-orange-600'
+                    }[type] || 'text-gray-500';
+                }
+            }
+        }
+    </script>
 </body>
 </html>

@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "broAI Workspace",
+  "version": "1.0",
+  "description": "Autonomous AI Agent Workspace in your Sidepanel",
+  "permissions": [
+    "sidePanel",
+    "tabs",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "action": {
+    "default_title": "Open broAI Workspace"
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}
